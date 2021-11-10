@@ -1,0 +1,105 @@
+# importing all required libraries
+from unsync import unsync
+from telethon import TelegramClient
+import time
+from telethon.tl.functions.messages import GetHistoryRequest
+from elasticsearch import Elasticsearch
+
+
+# your phone number
+phone = ***
+api_id = ***
+api_hash = ***
+number_of_dialogs_wil_be_fetched =1
+
+def post_es(doc,post_number,index_name):
+# Create the elasticsearch client.
+    try:
+        es = Elasticsearch(host = "localhost", port = 9200)
+            # Open csv file and bulk upload
+        res = es.index(index = index_name, id = post_number, document=doc)
+        print(res['result'])
+    except Exception as error:
+        # the elasticsearch.exceptions.NotFoundError object has a dict attribute
+        print (type(error)) 
+
+
+last_date = None
+chunk_size = 200
+chats = []
+groups=[]
+
+@unsync
+async def main():
+    async with TelegramClient(phone, api_id, api_hash) as client:
+        mydict = {"message":[],"id":[],"date":[]}
+        print("\n\n\n\n+++++++++++++++++++++++++")
+        i=0            
+        dialogs = await client.get_dialogs(number_of_dialogs_wil_be_fetched)
+       
+        for dialog in dialogs:
+             
+            dict_dialog = (dialog.to_dict()) 
+            message_string = str(dict_dialog['message']) 
+            start = message_string.find("message='") + len("message='")
+            end = message_string.find("',")
+            substring_message = message_string[start:end]
+            #print(substring)
+            time.sleep(1)
+            print("\n\n\n\n+++++++++++++++++++++++++",dict_dialog['name'], substring_message, dict_dialog['date'])
+            mydict={
+                    "name" : (dict_dialog['name']),
+                    "message" : (substring_message),
+                    "date" : (dict_dialog['date'])
+                                            
+                        }                        
+            i=i+1
+            print(i,":\n", dialog.stringify(),'\n\n\n\n\n\n\n=================================')
+            post_es(mydict,i,"dialogs")
+            
+           
+            print("++++++++++++\n\n", message_string, "\n\n\n\*88888888888888888")
+            
+            if((message_string.partition('peer_id=')[2]).partition('(')[0] == 'PeerChannel'):  
+                print("channel")
+                start = message_string.find("channel_id=") + len("channel_id=")
+                end = message_string.find("),")
+                substring_id = message_string[start:end]
+                print(substring_id)
+                entity = await client.get_entity(int(substring_id))
+                print(entity.to_dict())
+                dict_chat={
+                    "title" : (entity.to_dict()['title']),
+                    "photo_id" : (entity.to_dict()['photo']['photo_id']),
+                    "id" : (entity.to_dict()['id'])
+                                            
+                        }
+                print(dict_chat)
+                post_es(dict_chat,i,"channels") 
+
+                
+                
+            elif(message_string.partition('peer_id=')[2].partition('(')[0] == 'PeerChat'):
+                print("chat")
+               # print(message_string.find("user_id="),len(message_string))
+                start = message_string.find("user_id=") + len("user_id=")
+                end = message_string.find("), fwd_")             
+                substring_id = message_string[start:end]                
+                entity = await client.get_entity(int(substring_id))
+              #  print(entity.to_dict())
+              #  print(entity.to_dict()['username'],entity.to_dict()['photo']['photo_id'],entity.to_dict()['id'])
+                
+                
+                dict_chat={
+                    "name" : (entity.to_dict()['username']),
+                    "photo_id" : (entity.to_dict()['photo']['photo_id']),
+                    "id" : (entity.to_dict()['id'])
+                                            
+                        } 
+                print(dict_chat)
+                post_es(dict_chat,i,"users")
+
+main()
+
+
+ 
